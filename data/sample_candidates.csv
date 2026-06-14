@@ -1,0 +1,4 @@
+code,name,board,price,pct_change,index_pct_change,current_volume,same_time_volumes_5d,turnover_rate,float_market_cap_billion,recent_daily_volumes,projected_daily_volume,ma5,ma10,ma20,ma60,ma60_prev,intraday_above_avg_ratio,recovered_after_avg_break,theme,theme_rank,has_hot_theme,pressure_distance_pct,upper_shadow_recent,is_st,is_suspended,listing_days,limit_up_seal_strength
+300001,示例科技,创业板,18.32,5.2,1.1,3200000,1200000|1350000|1280000|1310000|1260000,6.8,88,8000000|9300000|10800000,13500000,17.2,16.5,15.7,14.9,14.6,0.86,true,机器人,3,true,12,false,false,false,360,0.62
+600001,观察股份,沪市主板,11.08,3.4,0.8,1650000,1050000|1000000|980000|1040000|1010000,7.4,132,7500000|8100000|8600000,10600000,10.7,10.4,10.1,9.9,9.85,0.74,true,智能制造,8,true,8,false,false,false,1800,0.4
+000001,低量比样本,深市主板,9.12,1.2,0.9,800000,1100000|1050000|1080000|1020000|1060000,6.2,96,6000000|6400000|6900000,7200000,9,8.8,8.5,8.1,8,0.72,false,,,false,9,false,false,false,2200,
