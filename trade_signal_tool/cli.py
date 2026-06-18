@@ -42,7 +42,7 @@ def main(argv=None) -> int:
     close_push.add_argument("--watch-threshold", type=float, default=75.0)
     close_push.add_argument("--strong-threshold", type=float, default=85.0)
     close_push.add_argument("--limit", type=int, default=10)
-    close_push.add_argument("--max-candidates", type=int, default=160)
+    close_push.add_argument("--max-candidates", type=int, default=200)
     close_push.add_argument("--enrich-limit", type=int, default=30)
     close_push.add_argument("--force", action="store_true", help="Run even before the after-close window")
     close_push.add_argument("--force-calendar", action="store_true", help="Skip external trading-calendar lookup")

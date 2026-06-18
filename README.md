@@ -105,6 +105,8 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.trade-signal-tool.pl
 硬过滤：
 
 - 剔除 ST、停牌、上市不足 60 天的股票
+- 剔除 `68` 开头科创板股票，避免推送账户不可交易标的
+- 当日涨幅超过 12% 的股票不进入候选池，避免收盘后追高
 - 流通市值必须在 50 亿-400 亿
 - 收盘价必须站上 MA20
 - 换手率按市值动态分层：

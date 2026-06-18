@@ -156,6 +156,124 @@ class AkshareSinaSpotFallbackAkshare(SinaDailyFallbackAkshare):
         )
 
 
+class LowRiskMixedBoardSpotAkshare(SinaDailyFallbackAkshare):
+    def stock_zh_a_spot_em(self):
+        raise RuntimeError("eastmoney spot disconnected")
+
+    def stock_zh_a_spot(self):
+        return FakeFrame(
+            [
+                {
+                    "代码": "bj920001",
+                    "名称": "北证样本",
+                    "最新价": 12.0,
+                    "涨跌幅": 7.0,
+                    "成交量": 600_000_000,
+                    "成交额": 7_200_000_000,
+                },
+                {
+                    "代码": "sz300001",
+                    "名称": "示例科技",
+                    "最新价": 18.32,
+                    "涨跌幅": 5.2,
+                    "成交量": 320_000_000,
+                    "成交额": 5_800_000_000,
+                },
+            ]
+        )
+
+
+class LowRiskMissingLiquidityRankAkshare(SinaDailyFallbackAkshare):
+    def stock_zh_a_spot_em(self):
+        raise RuntimeError("eastmoney spot disconnected")
+
+    def stock_zh_a_spot(self):
+        return FakeFrame(
+            [
+                {
+                    "代码": "sz300308",
+                    "名称": "高成交额样本",
+                    "最新价": 120.0,
+                    "涨跌幅": 8.0,
+                    "成交量": 1_000_000_000,
+                    "成交额": 40_000_000_000,
+                },
+                {
+                    "代码": "sz301566",
+                    "名称": "高涨幅样本",
+                    "最新价": 20.0,
+                    "涨跌幅": 20.0,
+                    "成交量": 120_000_000,
+                    "成交额": 1_200_000_000,
+                },
+            ]
+        )
+
+
+class LowRiskMixedCapSpotAkshare(SinaDailyFallbackAkshare):
+    def stock_zh_a_spot_em(self):
+        raise RuntimeError("eastmoney spot disconnected")
+
+    def stock_zh_a_spot(self):
+        return FakeFrame(
+            [
+                {
+                    "代码": "sz300308",
+                    "名称": "超大市值样本",
+                    "最新价": 120.0,
+                    "涨跌幅": 8.0,
+                    "成交量": 1_000_000_000,
+                    "成交额": 40_000_000_000,
+                },
+                {
+                    "代码": "sz300001",
+                    "名称": "示例科技",
+                    "最新价": 18.32,
+                    "涨跌幅": 5.2,
+                    "成交量": 320_000_000,
+                    "成交额": 5_800_000_000,
+                },
+            ]
+        )
+
+    def stock_zh_a_daily(self, symbol, start_date, end_date, adjust):
+        frame = super().stock_zh_a_daily(symbol, start_date, end_date, adjust)
+        records = frame.to_dict("records")
+        outstanding_share = 2_000_000_000 if symbol == "sz300308" else 1_000_000_000
+        for row in records:
+            row["outstanding_share"] = outstanding_share
+        self.sina_daily_symbol = symbol
+        return FakeFrame(records)
+
+
+class ScienceBoardSpotAkshare(FakeAkshare):
+    def stock_zh_a_spot_em(self):
+        return FakeFrame(
+            [
+                {
+                    "代码": "688757",
+                    "名称": "科创样本",
+                    "最新价": 18.32,
+                    "涨跌幅": 20.0,
+                    "成交量": 3_200_000,
+                    "量比": 5.0,
+                    "换手率": 8.0,
+                    "流通市值": 8_800_000_000,
+                },
+                {
+                    "代码": "300001",
+                    "名称": "示例科技",
+                    "最新价": 18.32,
+                    "涨跌幅": 5.2,
+                    "成交量": 3_200_000,
+                    "量比": 2.5,
+                    "换手率": 6.8,
+                    "流通市值": 8_800_000_000,
+                },
+            ]
+        )
+
+
 class AkShareProviderTest(unittest.TestCase):
     def test_provider_builds_candidates_from_realtime_daily_and_minute_data(self):
         fake_ak = FakeAkshare()
@@ -196,6 +314,54 @@ class AkShareProviderTest(unittest.TestCase):
 
         self.assertEqual(candidates[0].code, "300001")
         self.assertEqual(ak.sina_daily_symbol, "sz300001")
+
+    def test_provider_prioritizes_main_market_when_low_risk_spot_lacks_liquidity_fields(self):
+        def fake_get(*args, **kwargs):
+            raise AssertionError("network fallback should not be needed")
+
+        ak = LowRiskMixedBoardSpotAkshare()
+        provider = AkShareProvider(
+            ak_module=ak,
+            today=date(2026, 6, 3),
+            requests_get=fake_get,
+            prefer_low_risk_spot=True,
+        )
+
+        candidates = provider.fetch_candidates(max_candidates=1, enrich_limit=1)
+
+        self.assertEqual(candidates[0].code, "300001")
+        self.assertEqual(candidates[0].board, "创业板")
+
+    def test_provider_prioritizes_pct_change_when_low_risk_spot_lacks_liquidity_fields(self):
+        provider = AkShareProvider(
+            ak_module=LowRiskMissingLiquidityRankAkshare(),
+            today=date(2026, 6, 3),
+            prefer_low_risk_spot=True,
+        )
+
+        candidates = provider.fetch_candidates(max_candidates=1, enrich_limit=1)
+
+        self.assertEqual(candidates[0].code, "301566")
+
+    def test_provider_continues_after_enriched_market_cap_is_out_of_range(self):
+        provider = AkShareProvider(
+            ak_module=LowRiskMixedCapSpotAkshare(),
+            today=date(2026, 6, 3),
+            prefer_low_risk_spot=True,
+        )
+
+        candidates = provider.fetch_candidates(max_candidates=2, enrich_limit=1)
+
+        self.assertEqual(candidates[0].code, "300001")
+        self.assertLessEqual(candidates[0].float_market_cap_billion, 400.0)
+
+    def test_provider_excludes_science_board_candidates(self):
+        provider = AkShareProvider(ak_module=ScienceBoardSpotAkshare(), today=date(2026, 6, 3))
+
+        candidates = provider.fetch_candidates(max_candidates=10, enrich_limit=1)
+
+        self.assertEqual(candidates[0].code, "300001")
+        self.assertEqual(candidates[0].board, "创业板")
 
     def test_provider_falls_back_to_eastmoney_realtime_api_when_akshare_spot_fails(self):
         captured = {}

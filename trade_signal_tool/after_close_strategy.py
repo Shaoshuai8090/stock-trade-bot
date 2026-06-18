@@ -8,6 +8,8 @@ from trade_signal_tool.models import EvaluationResult, Signal, StockCandidate
 @dataclass(frozen=True)
 class AfterCloseConfig:
     min_float_market_cap_billion: float = 50.0
+    excluded_code_prefixes: Tuple[str, ...] = ("68",)
+    max_intraday_gain_pct: float = 12.0
     max_float_market_cap_billion: float = 400.0
     min_listing_days: int = 60
     watch_threshold: float = 70.0
@@ -84,6 +86,10 @@ class AfterCloseStrategy:
 
     def _hard_rejection(self, candidate: StockCandidate, metrics: dict) -> Optional[Tuple[str, str]]:
         cfg = self.config
+        if candidate.code.startswith(cfg.excluded_code_prefixes):
+            return "excluded_code_prefix", "账户不可交易的板块不进入候选池"
+        if candidate.pct_change > cfg.max_intraday_gain_pct:
+            return "overextended_intraday_gain", "当日涨幅过大，收盘后不追高"
         if candidate.is_st:
             return "st_stock", "ST 股票不进入候选池"
         if candidate.is_suspended:

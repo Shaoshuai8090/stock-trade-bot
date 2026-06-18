@@ -30,11 +30,11 @@ class AkShareProvider:
     def fetch_candidates(self, max_candidates: int = 80, enrich_limit: int = 20) -> List[StockCandidate]:
         spot_records = self._spot_records()
         rough = [record for record in spot_records if self._passes_rough_filters(record)]
-        rough.sort(key=lambda record: (_num(record, "量比"), _num(record, "换手率")), reverse=True)
+        rough.sort(key=self._rough_rank_key, reverse=True)
         candidates = []
         for record in rough[: max_candidates]:
             candidate = self._enrich_record(record)
-            if candidate is not None:
+            if candidate is not None and self._passes_enriched_rough_filters(candidate):
                 candidates.append(candidate)
             if len(candidates) >= enrich_limit:
                 break
@@ -82,7 +82,7 @@ class AkShareProvider:
             "invt": "2",
             "fid": "f12",
             "fs": "m:0 t:6,m:0 t:80,m:1 t:2,m:1 t:23,m:0 t:81 s:2048",
-            "fields": "f2,f3,f5,f8,f10,f12,f14,f21",
+            "fields": "f2,f3,f5,f6,f8,f10,f12,f14,f21",
         }
         last_error = None
         diff = []
@@ -110,6 +110,7 @@ class AkShareProvider:
                 "最新价": item.get("f2"),
                 "涨跌幅": item.get("f3"),
                 "成交量": item.get("f5"),
+                "成交额": item.get("f6"),
                 "换手率": item.get("f8"),
                 "量比": item.get("f10"),
                 "代码": item.get("f12"),
@@ -153,6 +154,7 @@ class AkShareProvider:
                 "最新价": item.get("trade"),
                 "涨跌幅": item.get("changepercent"),
                 "成交量": _num(item, "volume") / 100,
+                "成交额": item.get("amount"),
                 "换手率": item.get("turnoverratio"),
                 "量比": 0,
                 "代码": item.get("code"),
@@ -169,6 +171,7 @@ class AkShareProvider:
                 "涨跌幅": item.get("涨跌幅"),
                 "成交量": _num(item, "成交量") / 100,
                 "_成交量_股": _num(item, "成交量"),
+                "成交额": item.get("成交额", 0),
                 "换手率": item.get("换手率", 0),
                 "量比": item.get("量比", 0),
                 "代码": _clean_code(item.get("代码", "")),
@@ -180,19 +183,55 @@ class AkShareProvider:
 
     def _passes_rough_filters(self, record: Dict[str, Any]) -> bool:
         name = str(record.get("名称", ""))
+        code = _clean_code(record.get("代码", ""))
         price = _num(record, "最新价")
         if not name or "ST" in name.upper() or price <= 0:
+            return False
+        if _is_science_board_code(code):
             return False
         volume_ratio = _num(record, "量比")
         turnover_rate = _num(record, "换手率")
         float_cap_billion = _num(record, "流通市值") / 100_000_000
         pct_change = _num(record, "涨跌幅")
+        liquidity_fields_missing = volume_ratio == 0 and turnover_rate == 0 and float_cap_billion == 0
+        if liquidity_fields_missing and _is_beijing_code(code):
+            return False
         return (
             (volume_ratio >= 0.8 or volume_ratio == 0)
             and (turnover_rate == 0 or 3 <= turnover_rate <= 18)
             and (float_cap_billion == 0 or 50 <= float_cap_billion <= 400)
             and pct_change > 0
         )
+
+    def _rough_rank_key(self, record: Dict[str, Any]) -> tuple:
+        code = _clean_code(record.get("代码", ""))
+        volume_ratio = _num(record, "量比")
+        turnover_rate = _num(record, "换手率")
+        float_cap_billion = _num(record, "流通市值") / 100_000_000
+        has_liquidity_fields = 1 if volume_ratio > 0 or turnover_rate > 0 or float_cap_billion > 0 else 0
+        main_market = 0 if _is_beijing_code(code) else 1
+        if not has_liquidity_fields:
+            return (
+                0,
+                main_market,
+                _num(record, "涨跌幅"),
+                _num(record, "成交额"),
+                _num(record, "成交量"),
+                0.0,
+                0.0,
+            )
+        return (
+            1,
+            volume_ratio,
+            turnover_rate,
+            main_market,
+            _num(record, "成交额"),
+            _num(record, "涨跌幅"),
+            _num(record, "成交量"),
+        )
+
+    def _passes_enriched_rough_filters(self, candidate: StockCandidate) -> bool:
+        return 50 <= candidate.float_market_cap_billion <= 400
 
     def _enrich_record(self, record: Dict[str, Any]) -> Optional[StockCandidate]:
         code = _clean_code(record.get("代码", ""))
@@ -341,12 +380,20 @@ def _latest_outstanding_share(daily_records: List[Dict[str, Any]]) -> float:
     return 0.0
 
 
+def _is_beijing_code(code: str) -> bool:
+    return code.startswith(("8", "4", "9"))
+
+
+def _is_science_board_code(code: str) -> bool:
+    return code.startswith("68")
+
+
 def _board_for_code(code: str) -> str:
     if code.startswith("300") or code.startswith("301"):
         return "创业板"
     if code.startswith("688") or code.startswith("689"):
         return "科创板"
-    if code.startswith("8") or code.startswith("4"):
+    if _is_beijing_code(code):
         return "北交所"
     if code.startswith("6"):
         return "沪市主板"
