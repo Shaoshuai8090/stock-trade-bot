@@ -9,7 +9,7 @@ from trade_signal_tool.models import EvaluationResult, Signal, StockCandidate
 class AfterCloseConfig:
     min_float_market_cap_billion: float = 50.0
     excluded_code_prefixes: Tuple[str, ...] = ("68",)
-    max_intraday_gain_pct: float = 12.0
+    max_intraday_gain_pct: float = 8.0
     max_float_market_cap_billion: float = 400.0
     min_listing_days: int = 60
     watch_threshold: float = 70.0

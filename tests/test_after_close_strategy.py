@@ -114,6 +114,12 @@ class AfterCloseStrategyTest(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertEqual(result.reason_code, "overextended_intraday_gain")
 
+    def test_rejects_main_board_limit_up_gain(self):
+        result = AfterCloseStrategy().evaluate(candidate(code="000001", board="深市主板", pct_change=10.0))
+
+        self.assertFalse(result.passed)
+        self.assertEqual(result.reason_code, "overextended_intraday_gain")
+
 
 if __name__ == "__main__":
     unittest.main()
