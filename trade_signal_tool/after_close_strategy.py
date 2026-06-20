@@ -10,6 +10,8 @@ class AfterCloseConfig:
     min_float_market_cap_billion: float = 50.0
     excluded_code_prefixes: Tuple[str, ...] = ("68",)
     max_intraday_gain_pct: float = 8.0
+    max_ma5_gap_pct: float = 5.0
+    max_ma10_gap_pct: float = 8.0
     max_float_market_cap_billion: float = 400.0
     min_listing_days: int = 60
     watch_threshold: float = 70.0
@@ -71,12 +73,27 @@ class AfterCloseStrategy:
         avg_volume = mean(candidate.same_time_volumes_5d) if candidate.same_time_volumes_5d else 0
         volume_ratio = candidate.current_volume / avg_volume if avg_volume else 0
         ma60_slope_pct = ((candidate.ma60 - candidate.ma60_prev) / candidate.ma60_prev * 100) if candidate.ma60_prev else 0
+        ma5_gap_pct = self._gap_pct(candidate.price, candidate.ma5)
+        ma10_gap_pct = self._gap_pct(candidate.price, candidate.ma10)
+        ma20_gap_pct = self._gap_pct(candidate.price, candidate.ma20)
+        support = candidate.ma5 if ma5_gap_pct <= self.config.max_ma5_gap_pct else candidate.ma10
+        buy_zone_low = support * 0.995 if support > 0 else 0.0
+        buy_zone_high = support * 1.015 if support > 0 else 0.0
         return {
             "volume_ratio": volume_ratio,
             "turnover_rate": candidate.turnover_rate,
             "float_market_cap_billion": candidate.float_market_cap_billion,
             "intraday_relative_strength": candidate.pct_change - candidate.index_pct_change,
             "intraday_above_avg_ratio": candidate.intraday_above_avg_ratio,
+            "ma5": candidate.ma5,
+            "ma10": candidate.ma10,
+            "ma20": candidate.ma20,
+            "ma5_gap_pct": ma5_gap_pct,
+            "ma10_gap_pct": ma10_gap_pct,
+            "ma20_gap_pct": ma20_gap_pct,
+            "buy_zone_low": buy_zone_low,
+            "buy_zone_high": buy_zone_high,
+            "stop_loss": candidate.ma20 * 0.97 if candidate.ma20 > 0 else 0.0,
             "ma60_slope_pct": ma60_slope_pct,
             "pressure_distance_pct": candidate.pressure_distance_pct or 999.0,
             "turnover_min": self._turnover_range(candidate.float_market_cap_billion)[0],
@@ -90,6 +107,8 @@ class AfterCloseStrategy:
             return "excluded_code_prefix", "账户不可交易的板块不进入候选池"
         if candidate.pct_change > cfg.max_intraday_gain_pct:
             return "overextended_intraday_gain", "当日涨幅过大，收盘后不追高"
+        if metrics["ma5_gap_pct"] > cfg.max_ma5_gap_pct and metrics["ma10_gap_pct"] > cfg.max_ma10_gap_pct:
+            return "poor_buy_point", "价格远离 MA5/MA10，次日买点不友好"
         if candidate.is_st:
             return "st_stock", "ST 股票不进入候选池"
         if candidate.is_suspended:
@@ -143,6 +162,11 @@ class AfterCloseStrategy:
         score += liquidity_score
         if liquidity_score >= 7:
             reasons.append("市值和换手匹配短线候选区间")
+
+        buy_point_score = self._buy_point_score(metrics)
+        score += buy_point_score
+        if buy_point_score >= 4:
+            reasons.append("买点距离均线支撑较近，适合次日等回踩确认")
 
         return min(score, 100.0), reasons
 
@@ -233,6 +257,22 @@ class AfterCloseStrategy:
         half_range = max((turnover_max - turnover_min) / 2, 1)
         turnover_score = max(0.0, 5 - abs(candidate.turnover_rate - midpoint) / half_range * 2)
         return min(cap_score + turnover_score, 10.0)
+
+    def _buy_point_score(self, metrics: dict) -> float:
+        ma5_gap = metrics["ma5_gap_pct"]
+        ma10_gap = metrics["ma10_gap_pct"]
+        if ma5_gap <= 2:
+            return 6.0
+        if ma5_gap <= self.config.max_ma5_gap_pct:
+            return 4.0
+        if ma10_gap <= self.config.max_ma10_gap_pct:
+            return 2.0
+        return 0.0
+
+    def _gap_pct(self, price: float, reference: float) -> float:
+        if reference <= 0:
+            return 999.0
+        return (price - reference) / reference * 100
 
     def _turnover_range(self, float_market_cap_billion: float) -> Tuple[float, float]:
         if float_market_cap_billion < 100:

@@ -120,6 +120,29 @@ class AfterCloseStrategyTest(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertEqual(result.reason_code, "overextended_intraday_gain")
 
+    def test_rejects_poor_buy_point_far_above_moving_average_supports(self):
+        result = AfterCloseStrategy().evaluate(
+            candidate(
+                price=20.2,
+                pct_change=5.0,
+                ma5=18.4,
+                ma10=18.1,
+                ma20=17.5,
+            )
+        )
+
+        self.assertFalse(result.passed)
+        self.assertEqual(result.reason_code, "poor_buy_point")
+
+    def test_signal_metrics_include_trade_plan_reference_levels(self):
+        result = AfterCloseStrategy().evaluate(candidate())
+
+        self.assertTrue(result.passed)
+        self.assertIn("ma5_gap_pct", result.signal.metrics)
+        self.assertIn("buy_zone_low", result.signal.metrics)
+        self.assertIn("buy_zone_high", result.signal.metrics)
+        self.assertIn("stop_loss", result.signal.metrics)
+
 
 if __name__ == "__main__":
     unittest.main()

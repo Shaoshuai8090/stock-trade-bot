@@ -62,21 +62,37 @@ class TelegramNotifier:
         reasons = "\n".join(f"- {reason}" for reason in signal.reasons)
         theme = f"\n题材: {signal.theme}" if signal.theme else ""
         source = f"\n数据源: {signal.data_source}" if signal.data_source else ""
+        metrics = signal.metrics
+        trade_plan = TelegramNotifier._format_trade_plan(metrics)
         return (
-            "A股交易信号提醒\n"
+            "A股收盘观察信号\n"
             f"股票: {signal.code} {signal.name}\n"
             f"信号等级: {signal.level}\n"
             f"信号类型: {signal.signal_type}\n"
             f"综合评分: {signal.score:.2f}\n"
-            f"量比: {signal.metrics.get('volume_ratio', 0):.2f}\n"
-            f"换手率: {signal.metrics.get('turnover_rate', 0):.2f}%\n"
-            f"流通市值: {signal.metrics.get('float_market_cap_billion', 0):.1f}亿\n"
-            f"相对指数强度: {signal.metrics.get('intraday_relative_strength', 0):.2f}%\n"
-            f"分时均线上方占比: {signal.metrics.get('intraday_above_avg_ratio', 0):.0%}"
+            f"量比: {metrics.get('volume_ratio', 0):.2f}\n"
+            f"换手率: {metrics.get('turnover_rate', 0):.2f}%\n"
+            f"流通市值: {metrics.get('float_market_cap_billion', 0):.1f}亿\n"
+            f"相对指数强度: {metrics.get('intraday_relative_strength', 0):.2f}%\n"
+            f"分时均线上方占比: {metrics.get('intraday_above_avg_ratio', 0):.0%}\n"
+            f"MA5乖离: {metrics.get('ma5_gap_pct', 0):.2f}% | MA10乖离: {metrics.get('ma10_gap_pct', 0):.2f}%"
             f"{theme}"
             f"{source}\n"
+            f"交易计划:\n{trade_plan}\n"
             f"触发因子:\n{reasons}\n\n"
             "仅为信号提醒，不构成投资建议。请自行确认仓位和风险。"
+        )
+
+    @staticmethod
+    def _format_trade_plan(metrics: dict) -> str:
+        low = metrics.get("buy_zone_low", 0)
+        high = metrics.get("buy_zone_high", 0)
+        stop_loss = metrics.get("stop_loss", 0)
+        return (
+            "- 动作: 次日只等回踩或承接确认，不追高\n"
+            f"- 参考买区: {low:.2f}-{high:.2f}\n"
+            f"- 止损参考: {stop_loss:.2f}\n"
+            "- 失效条件: 高开远离买区、跌破 MA20、量能异常放大但承接不足"
         )
 
     def send(self, signals: Iterable[Signal]) -> None:
@@ -132,6 +148,7 @@ def format_signal(signal: Signal) -> str:
         f"类型：{signal.signal_type}",
         f"量比：{metrics.get('volume_ratio', 0):.2f} | 换手率：{metrics.get('turnover_rate', 0):.2f}% | 流通市值：{metrics.get('float_market_cap_billion', 0):.1f}亿",
         f"相对指数强度：{metrics.get('intraday_relative_strength', 0):.2f}% | 分时均线上方占比：{metrics.get('intraday_above_avg_ratio', 0):.0%}",
+        f"参考买区：{metrics.get('buy_zone_low', 0):.2f}-{metrics.get('buy_zone_high', 0):.2f} | 止损参考：{metrics.get('stop_loss', 0):.2f}",
     ]
     if signal.theme:
         lines.append(f"题材：{signal.theme}")

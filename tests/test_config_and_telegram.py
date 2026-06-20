@@ -65,6 +65,11 @@ class ConfigAndTelegramTest(unittest.TestCase):
                 "float_market_cap_billion": 88.0,
                 "intraday_relative_strength": 4.1,
                 "intraday_above_avg_ratio": 0.86,
+                "ma5_gap_pct": 2.8,
+                "ma10_gap_pct": 7.0,
+                "buy_zone_low": 17.71,
+                "buy_zone_high": 18.07,
+                "stop_loss": 15.71,
             },
             theme="机器人",
             data_source="tencent",
@@ -72,11 +77,15 @@ class ConfigAndTelegramTest(unittest.TestCase):
 
         message = TelegramNotifier.format_signal_message(signal)
 
-        self.assertIn("A股交易信号提醒", message)
+        self.assertIn("A股收盘观察信号", message)
         self.assertIn("股票: 300001 示例科技", message)
         self.assertIn("信号等级: strong", message)
         self.assertIn("题材: 机器人", message)
         self.assertIn("量比: 2.50", message)
+        self.assertIn("交易计划", message)
+        self.assertIn("参考买区: 17.71-18.07", message)
+        self.assertIn("失效条件", message)
+        self.assertIn("止损参考: 15.71", message)
         self.assertIn("数据源: tencent", message)
         self.assertIn("仅为信号提醒，不构成投资建议。", message)
 
