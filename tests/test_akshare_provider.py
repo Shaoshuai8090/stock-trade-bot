@@ -274,6 +274,50 @@ class ScienceBoardSpotAkshare(FakeAkshare):
         )
 
 
+class ConceptThemeAkshare(FakeAkshare):
+    def __init__(self):
+        super().__init__()
+        self.concept_symbols = []
+
+    def stock_board_concept_name_em(self):
+        return FakeFrame(
+            [
+                {"板块名称": "机器人", "涨跌幅": 3.8},
+                {"板块名称": "人工智能", "涨跌幅": 5.2},
+                {"板块名称": "低空经济", "涨跌幅": 1.4},
+            ]
+        )
+
+    def stock_board_concept_cons_em(self, symbol):
+        self.concept_symbols.append(symbol)
+        records = {
+            "人工智能": [
+                {"代码": "300001", "名称": "示例科技"},
+                {"代码": "000001", "名称": "平安银行"},
+            ],
+            "机器人": [
+                {"代码": "300001", "名称": "示例科技"},
+                {"代码": "300002", "名称": "好日线"},
+            ],
+            "低空经济": [
+                {"代码": "300003", "名称": "低空样本"},
+            ],
+        }
+        return FakeFrame(records[symbol])
+
+
+class FailingConceptNameAkshare(FakeAkshare):
+    def stock_board_concept_name_em(self):
+        raise RuntimeError("concept list disconnected")
+
+
+class PartiallyFailingConceptConsAkshare(ConceptThemeAkshare):
+    def stock_board_concept_cons_em(self, symbol):
+        if symbol == "人工智能":
+            raise RuntimeError("constituents disconnected")
+        return super().stock_board_concept_cons_em(symbol)
+
+
 class AkShareProviderTest(unittest.TestCase):
     def test_provider_builds_candidates_from_realtime_daily_and_minute_data(self):
         fake_ak = FakeAkshare()
@@ -362,6 +406,66 @@ class AkShareProviderTest(unittest.TestCase):
 
         self.assertEqual(candidates[0].code, "300001")
         self.assertEqual(candidates[0].board, "创业板")
+
+    def test_provider_enriches_candidates_with_strongest_concept_theme(self):
+        ak = ConceptThemeAkshare()
+        provider = AkShareProvider(
+            ak_module=ak,
+            today=date(2026, 6, 3),
+            hot_concept_limit=2,
+        )
+
+        candidates = provider.fetch_candidates(max_candidates=10, enrich_limit=2)
+
+        by_code = {candidate.code: candidate for candidate in candidates}
+        self.assertEqual(by_code["300001"].theme, "人工智能")
+        self.assertEqual(by_code["300001"].theme_rank, 1)
+        self.assertTrue(by_code["300001"].has_hot_theme)
+        self.assertEqual(by_code["000001"].theme, "人工智能")
+        self.assertEqual(by_code["000001"].theme_rank, 1)
+        self.assertEqual(ak.concept_symbols, ["人工智能", "机器人"])
+
+    def test_provider_keeps_candidates_when_concept_list_fails(self):
+        provider = AkShareProvider(
+            ak_module=FailingConceptNameAkshare(),
+            today=date(2026, 6, 3),
+        )
+
+        candidates = provider.fetch_candidates(max_candidates=10, enrich_limit=1)
+
+        self.assertEqual(candidates[0].code, "300001")
+        self.assertEqual(candidates[0].theme, "")
+        self.assertIsNone(candidates[0].theme_rank)
+        self.assertFalse(candidates[0].has_hot_theme)
+
+    def test_provider_skips_one_failed_concept_and_uses_next_hot_concept(self):
+        provider = AkShareProvider(
+            ak_module=PartiallyFailingConceptConsAkshare(),
+            today=date(2026, 6, 3),
+            hot_concept_limit=2,
+        )
+
+        candidates = provider.fetch_candidates(max_candidates=10, enrich_limit=1)
+
+        self.assertEqual(candidates[0].code, "300001")
+        self.assertEqual(candidates[0].theme, "机器人")
+        self.assertEqual(candidates[0].theme_rank, 2)
+        self.assertTrue(candidates[0].has_hot_theme)
+
+    def test_provider_can_disable_concept_theme_enrichment(self):
+        ak = ConceptThemeAkshare()
+        provider = AkShareProvider(
+            ak_module=ak,
+            today=date(2026, 6, 3),
+            enable_concept_theme=False,
+        )
+
+        candidates = provider.fetch_candidates(max_candidates=10, enrich_limit=1)
+
+        self.assertEqual(candidates[0].theme, "")
+        self.assertIsNone(candidates[0].theme_rank)
+        self.assertFalse(candidates[0].has_hot_theme)
+        self.assertEqual(ak.concept_symbols, [])
 
     def test_provider_falls_back_to_eastmoney_realtime_api_when_akshare_spot_fails(self):
         captured = {}

@@ -1,11 +1,13 @@
 import importlib
 import json
 import math
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from statistics import mean
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from trade_signal_tool.models import StockCandidate
+from trade_signal_tool.providers.concept_theme_provider import ConceptThemeProvider
 
 
 class AkShareProvider:
@@ -16,6 +18,8 @@ class AkShareProvider:
         import_module: Callable[[str], Any] = importlib.import_module,
         requests_get: Optional[Callable[..., Any]] = None,
         prefer_low_risk_spot: bool = False,
+        enable_concept_theme: bool = True,
+        hot_concept_limit: int = 20,
     ):
         if ak_module is None:
             try:
@@ -26,6 +30,8 @@ class AkShareProvider:
         self.today = today or date.today()
         self.requests_get = requests_get
         self.prefer_low_risk_spot = prefer_low_risk_spot
+        self.enable_concept_theme = enable_concept_theme
+        self.concept_theme_provider = ConceptThemeProvider(ak_module, hot_concept_limit=hot_concept_limit)
 
     def fetch_candidates(self, max_candidates: int = 80, enrich_limit: int = 20) -> List[StockCandidate]:
         spot_records = self._spot_records()
@@ -38,7 +44,28 @@ class AkShareProvider:
                 candidates.append(candidate)
             if len(candidates) >= enrich_limit:
                 break
-        return candidates
+        return self._with_concept_themes(candidates)
+
+    def _with_concept_themes(self, candidates: List[StockCandidate]) -> List[StockCandidate]:
+        if not self.enable_concept_theme or not candidates:
+            return candidates
+        try:
+            assignments = self.concept_theme_provider.assignments_for_codes(candidate.code for candidate in candidates)
+        except Exception:
+            return candidates
+        if not assignments:
+            return candidates
+        return [
+            replace(
+                candidate,
+                theme=assignments[candidate.code].theme,
+                theme_rank=assignments[candidate.code].theme_rank,
+                has_hot_theme=True,
+            )
+            if candidate.code in assignments
+            else candidate
+            for candidate in candidates
+        ]
 
     def trading_days(self) -> List[str]:
         frame = self.ak.tool_trade_date_hist_sina()
