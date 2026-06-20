@@ -41,6 +41,7 @@ python3 -m trade_signal_tool.cli scan --provider akshare --json
 - 腾讯财经 `qt.gtimg.cn`: 对候选池批量刷新实时价、涨跌幅、成交量、换手率、流通市值，并在推送里标记 `数据源: tencent`
 - AkShare 新浪全市场行情: 聚合 provider 优先用它枚举全市场，避免高频依赖东财
 - AkShare 日线/分钟线: 计算 MA5/10/20/60、近期成交量、压力位、分时均线上方占比
+- AkShare/东方财富概念板块: 拉取热门概念板块和成分股，为候选股填充 `theme`、`theme_rank`、`has_hot_theme`
 - Eastmoney/Sina 原始接口: 作为兜底源；Eastmoney 只在低风险源不可用时使用
 
 如果所有实时行情接口都被当前网络断开，CLI 会输出一行 `error: failed to fetch realtime A-share market data from AkShare/Eastmoney/Sina`。这通常是行情接口在当前网络、代理或 TLS 环境下拒绝连接；可以稍后重试，或在有稳定外网的服务器上运行。
@@ -127,7 +128,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.trade-signal-tool.pl
 总分 100 分：
 
 - 市场/相对强度：15
-- 题材强度：25
+- 题材强度：25，真实行情通过 AkShare/东方财富概念板块填充热门题材排名；接口不可用时按中性题材评分
 - 资金流扩展项：主力净流入加分、净流出扣分；未接入时中性
 - 趋势结构：20
 - 量价配合：20
