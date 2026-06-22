@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from trade_signal_tool.models import StockCandidate
 from trade_signal_tool.providers.a_stock_provider import AStockDataProvider
@@ -53,6 +54,12 @@ class FakeTencentProvider:
 
 
 class AStockDataProviderTest(unittest.TestCase):
+    def test_default_base_provider_limits_rough_scan_to_after_close_gain_range(self):
+        with patch("trade_signal_tool.providers.a_stock_provider.AkShareProvider") as provider_class:
+            AStockDataProvider(today=None)
+
+        provider_class.assert_called_once_with(prefer_low_risk_spot=True, max_rough_pct_change=8.0)
+
     def test_fetch_candidates_uses_base_provider_then_tencent_refresh(self):
         base = FakeBaseProvider()
         tencent = FakeTencentProvider()

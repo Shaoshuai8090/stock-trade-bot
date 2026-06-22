@@ -31,6 +31,7 @@ class AStockDataProvider:
         if requests_get is not None:
             kwargs["requests_get"] = requests_get
         kwargs["prefer_low_risk_spot"] = True
+        kwargs["max_rough_pct_change"] = 8.0
         self.base_provider = base_provider or AkShareProvider(**kwargs)
         self.realtime_provider = realtime_provider or TencentRealtimeProvider()
 

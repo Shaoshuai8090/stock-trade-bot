@@ -20,6 +20,7 @@ class AkShareProvider:
         prefer_low_risk_spot: bool = False,
         enable_concept_theme: bool = True,
         hot_concept_limit: int = 20,
+        max_rough_pct_change: Optional[float] = None,
     ):
         if ak_module is None:
             try:
@@ -32,6 +33,7 @@ class AkShareProvider:
         self.prefer_low_risk_spot = prefer_low_risk_spot
         self.enable_concept_theme = enable_concept_theme
         self.concept_theme_provider = ConceptThemeProvider(ak_module, hot_concept_limit=hot_concept_limit)
+        self.max_rough_pct_change = max_rough_pct_change
 
     def fetch_candidates(self, max_candidates: int = 80, enrich_limit: int = 20) -> List[StockCandidate]:
         spot_records = self._spot_records()
@@ -222,6 +224,8 @@ class AkShareProvider:
         pct_change = _num(record, "涨跌幅")
         liquidity_fields_missing = volume_ratio == 0 and turnover_rate == 0 and float_cap_billion == 0
         if liquidity_fields_missing and _is_beijing_code(code):
+            return False
+        if self.max_rough_pct_change is not None and pct_change > self.max_rough_pct_change:
             return False
         return (
             (volume_ratio >= 0.8 or volume_ratio == 0)

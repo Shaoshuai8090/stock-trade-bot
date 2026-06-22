@@ -274,6 +274,34 @@ class ScienceBoardSpotAkshare(FakeAkshare):
         )
 
 
+class OverextendedThenEligibleAkshare(FakeAkshare):
+    def stock_zh_a_spot_em(self):
+        return FakeFrame(
+            [
+                {
+                    "代码": "300999",
+                    "名称": "涨过头样本",
+                    "最新价": 25.0,
+                    "涨跌幅": 20.0,
+                    "成交量": 9_000_000,
+                    "量比": 6.0,
+                    "换手率": 9.0,
+                    "流通市值": 10_000_000_000,
+                },
+                {
+                    "代码": "300001",
+                    "名称": "示例科技",
+                    "最新价": 18.32,
+                    "涨跌幅": 5.2,
+                    "成交量": 3_200_000,
+                    "量比": 2.5,
+                    "换手率": 6.8,
+                    "流通市值": 8_800_000_000,
+                },
+            ]
+        )
+
+
 class ConceptThemeAkshare(FakeAkshare):
     def __init__(self):
         super().__init__()
@@ -406,6 +434,16 @@ class AkShareProviderTest(unittest.TestCase):
 
         self.assertEqual(candidates[0].code, "300001")
         self.assertEqual(candidates[0].board, "创业板")
+
+    def test_provider_can_skip_overextended_rough_records_and_continue_scanning(self):
+        ak = OverextendedThenEligibleAkshare()
+        provider = AkShareProvider(ak_module=ak, today=date(2026, 6, 3), max_rough_pct_change=8.0)
+
+        candidates = provider.fetch_candidates(max_candidates=10, enrich_limit=1)
+
+        self.assertEqual(candidates[0].code, "300001")
+        self.assertNotIn("300999", ak.hist_calls)
+        self.assertEqual(ak.hist_calls[0], "300001")
 
     def test_provider_enriches_candidates_with_strongest_concept_theme(self):
         ak = ConceptThemeAkshare()
